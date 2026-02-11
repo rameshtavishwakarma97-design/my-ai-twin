@@ -44,3 +44,16 @@ logs/
 # Local development
 .DS_Store
 Thumbs.db
+
+# Cache
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+node_modules/
+.npm/
+
+# Vercel
+.vercel

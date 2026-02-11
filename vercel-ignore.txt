@@ -1,0 +1,13 @@
+# Files to ignore during Vercel build
+.git/
+.github/
+.gitignore
+README.md
+.env.example
+.DS_Store
+Thumbs.db
+*.md
+.vscode/
+.idea/
+*.swp
+*.swo
