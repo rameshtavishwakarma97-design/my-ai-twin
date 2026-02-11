@@ -9,10 +9,10 @@ CORS(app)
 
 # Initialize global variables
 knowledge_base = None
-llm = None
+model = None
 
 def load_knowledge_base():
-    global knowledge_base, llm
+    global knowledge_base, model
     
     try:
         # Simple knowledge base loading with memory efficiency
@@ -40,32 +40,26 @@ def load_knowledge_base():
                 print(f"Error reading {file_path}: {e}")
                 knowledge_base[key] = ""
         
-        # Initialize LLM with minimal configuration
+        # Initialize Google GenAI with minimal configuration
         api_key = os.getenv('GOOGLE_API_KEY')
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is required")
         
         # Import here to avoid build issues
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                google_api_key=api_key,
-                temperature=0.3,
-                streaming=True,
-                max_tokens=1000,
-                timeout=30
-            )
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-1.5-flash')
         except ImportError as e:
-            print(f"Failed to import ChatGoogleGenerativeAI: {e}")
-            llm = None
+            print(f"Failed to import google.generativeai: {e}")
+            model = None
         
-        print("Knowledge base and LLM initialized successfully")
+        print("Knowledge base and Model initialized successfully")
         
     except Exception as e:
         print(f"Initialization error: {e}")
         knowledge_base = {'profile': '', 'interests': '', 'synthetic_future': ''}
-        llm = None
+        model = None
 
 def simple_retrieval(query):
     """Memory-efficient keyword-based retrieval"""
@@ -97,14 +91,14 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         "status": "healthy",
-        "llm_initialized": llm is not None,
+        "llm_initialized": model is not None,
         "knowledge_loaded": bool(knowledge_base and any(knowledge_base.values()))
     })
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """Chat endpoint with memory efficiency and error handling"""
-    if not llm:
+    if not model:
         return jsonify({"error": "LLM not initialized. Check environment variables."}), 500
     
     data = request.json
@@ -133,14 +127,15 @@ User Question: {query}
 Provide a helpful and personalized response based on the context above. Keep your response under 200 words."""
             
             # Generate response with error handling
-            response = llm.invoke(prompt)
+            response = model.generate_content(prompt, stream=True, generation_config=dict(max_output_tokens=500, temperature=0.3))
             
-            response_data = {
-                "response": response.content[:500] if response.content else "I apologize, but I couldn't generate a response.",
-                "sources": ["knowledge_base"]
-            }
-            
-            yield f"data: {json.dumps(response_data)}\n\n"
+            for chunk in response:
+                if chunk.text:
+                    response_data = {
+                        "response": chunk.text,
+                        "sources": ["knowledge_base"]
+                    }
+                    yield f"data: {json.dumps(response_data)}\n\n"
             
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
