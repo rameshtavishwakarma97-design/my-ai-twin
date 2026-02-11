@@ -1,5 +1,4 @@
 [build]
-  base = "my-rag-app"
   command = "pip install -r requirements.txt && echo 'Build complete'"
   functions = "api"
   publish = "public"
