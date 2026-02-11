@@ -92,7 +92,7 @@ def simple_retrieval(query):
 # Initialize on startup with error handling
 load_knowledge_base()
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({
@@ -101,7 +101,7 @@ def health_check():
         "knowledge_loaded": bool(knowledge_base and any(knowledge_base.values()))
     })
 
-@app.route('/api/chat', methods=['POST'])
+@app.route('/chat', methods=['POST'])
 def chat():
     """Chat endpoint with memory efficiency and error handling"""
     if not llm:
@@ -159,6 +159,9 @@ def too_large(e):
 def internal_error(e):
     return jsonify({"error": "Internal server error"}), 500
 
+# Netlify serverless function handler
+def handler(request):
+    return app(request.environ, lambda status, headers: None)
+
 if __name__ == '__main__':
-    # Local development with memory limits
     app.run(debug=True, port=5000, threaded=False)
