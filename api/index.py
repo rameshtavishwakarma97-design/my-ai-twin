@@ -2,12 +2,9 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
 import json
+import numpy as np
 
 # Load environment variables
 load_dotenv()
@@ -16,53 +13,62 @@ app = Flask(__name__)
 CORS(app)
 
 # Initialize global variables
-db = None
-qa_chain = None
+knowledge_base = None
+embeddings_model = None
+llm = None
 
-def initialize_rag():
-    global db, qa_chain
+def load_knowledge_base():
+    global knowledge_base, embeddings_model, llm
     
-    # Load documents
-    loader = DirectoryLoader(
-        './knowledge_base',
-        glob='**/*.txt',
-        loader_cls=TextLoader,
-        show_progress=True
-    )
-    documents = loader.load()
+    # Simple knowledge base loading
+    knowledge_base = {
+        'profile': '',
+        'interests': '',
+        'synthetic_future': ''
+    }
     
-    # Split documents into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
-    texts = text_splitter.split_documents(documents)
+    # Load text files
+    try:
+        with open('./knowledge_base/profile.txt', 'r', encoding='utf-8') as f:
+            knowledge_base['profile'] = f.read()
+        with open('./knowledge_base/interests.txt', 'r', encoding='utf-8') as f:
+            knowledge_base['interests'] = f.read()
+        with open('./knowledge_base/synthetic_future.txt', 'r', encoding='utf-8') as f:
+            knowledge_base['synthetic_future'] = f.read()
+    except Exception as e:
+        print(f"Error loading knowledge base: {e}")
     
-    # Create embeddings and vector store
-    embeddings = GoogleGenerativeAIEmbeddings(
+    # Initialize embeddings
+    embeddings_model = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001",
         google_api_key=os.getenv('GOOGLE_API_KEY')
     )
     
-    db = FAISS.from_documents(texts, embeddings)
-    
-    # Create QA chain
+    # Initialize LLM
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         google_api_key=os.getenv('GOOGLE_API_KEY'),
         temperature=0.3,
         streaming=True
     )
-    
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=db.as_retriever(),
-        return_source_documents=True
-    )
 
-# Initialize RAG on startup
-initialize_rag()
+def simple_retrieval(query):
+    """Simple keyword-based retrieval to avoid FAISS dependency"""
+    query_lower = query.lower()
+    relevant_docs = []
+    
+    for key, content in knowledge_base.items():
+        if any(word in content.lower() for word in query_lower.split() if len(word) > 2):
+            relevant_docs.append(content)
+    
+    # If no specific matches, return all content
+    if not relevant_docs:
+        relevant_docs = list(knowledge_base.values())
+    
+    return ' '.join(relevant_docs)
+
+# Initialize on startup
+load_knowledge_base()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -78,12 +84,25 @@ def chat():
     
     def generate():
         try:
-            result = qa_chain({"query": query})
+            # Retrieve relevant context
+            context = simple_retrieval(query)
             
-            # Prepare response data
+            # Create prompt with context
+            prompt = f"""You are an AI twin assistant. Use the following context to answer the user's question.
+
+Context:
+{context}
+
+User Question: {query}
+
+Provide a helpful and personalized response based on the context above."""
+            
+            # Generate response
+            response = llm.invoke(prompt)
+            
             response_data = {
-                "response": result['result'],
-                "sources": [doc.metadata['source'] for doc in result['source_documents']]
+                "response": response.content,
+                "sources": ["knowledge_base"]
             }
             
             yield f"data: {json.dumps(response_data)}\n\n"
