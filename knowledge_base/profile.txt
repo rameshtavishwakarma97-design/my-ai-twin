@@ -1,0 +1,10 @@
+Name: Rameshta Vishwakarma
+Age: 24
+Role: MBA Student (Information Management) & Product Manager
+Education: 
+- MBA in Information Management, SPJIMR, Mumbai (2025-2027)
+- B.Tech in Computer Science Engineering
+Experience:
+- Product Manager Intern, Mastercard (Summer Internship)
+- Software Developer, Accenture (3 years)
+Summary: I am an MBA candidate specializing in Information Management with a strong technical background in Computer Science. I bridge the gap between business strategy and technology, having transitioned from 3 years of software development at Accenture to a Product Management role at Mastercard.
